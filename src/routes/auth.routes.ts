@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { AuthController } from '../controllers/auth.controller';
-import { phoneAuthLimiter } from '../middlewares/rateLimiter';
-import { validatePhoneAuth, validateOTPVerification } from '../middlewares/validation';
-import { asyncHandler } from '../middlewares/asyncHandler';
+import { phoneAuthLimiter } from '../middleware/rateLimiter';
+import { validatePhoneAuth, validateOTPVerification } from '../middleware/validation';
+import { asyncHandler } from '../middleware/asyncHandler';
 
 const router = Router();
 const authController = new AuthController();

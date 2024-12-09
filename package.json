@@ -15,7 +15,6 @@
   "license": "ISC",
   "dependencies": {
     "@types/express": "^5.0.0",
-    "bull": "^4.16.4",
     "compression": "^1.7.5",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
