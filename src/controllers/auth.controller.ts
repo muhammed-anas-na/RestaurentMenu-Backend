@@ -1,6 +1,6 @@
+// src/controllers/auth.controller.ts
 import { Request, Response } from 'express';
 import { AuthService } from '../services/auth.service';
-import { PhoneAuthRequest, VerifyOTPRequest } from '../types/auth.types';
 
 export class AuthController {
   private authService: AuthService;
@@ -11,8 +11,7 @@ export class AuthController {
 
   initiatePhoneAuth = async (req: Request, res: Response): Promise<void> => {
     try {
-      const data: PhoneAuthRequest = req.body;
-      const result = await this.authService.initiatePhoneAuth(data);
+      const result = await this.authService.initiatePhoneAuth(req.body, req.deviceInfo);
       
       if (!result.success) {
         res.status(400).json(result);
@@ -32,8 +31,7 @@ export class AuthController {
 
   verifyOTP = async (req: Request, res: Response): Promise<void> => {
     try {
-      const data: VerifyOTPRequest = req.body;
-      const result = await this.authService.verifyOTP(data);
+      const result = await this.authService.verifyOTP(req.body);
       
       if (!result.success) {
         res.status(400).json(result);

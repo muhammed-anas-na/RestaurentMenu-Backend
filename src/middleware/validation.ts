@@ -1,17 +1,21 @@
-import { Request, Response, NextFunction } from 'express';
-import Joi from 'joi';
+import { Request, Response, NextFunction } from "express";
+import Joi from "joi";
 
 const phoneAuthSchema = Joi.object({
   phoneNumber: Joi.string()
     .pattern(/^\+[1-9]\d{1,14}$/)
     .required()
     .messages({
-      'string.pattern.base': 'Phone number must be in E.164 format (e.g., +14155552671)',
-      'any.required': 'Phone number is required',
+      "string.pattern.base":
+        "Phone number must be in E.164 format (e.g., +14155552671)",
+      "any.required": "Phone number is required",
     }),
-  recaptchaToken: Joi.string().required().messages({
-    'any.required': 'reCAPTCHA token is required',
-  }),
+  recaptchaToken:
+    process.env.NODE_ENV === "production"
+      ? Joi.string().required().messages({
+          "any.required": "reCAPTCHA token is required",
+        })
+      : Joi.string().optional(),
 });
 
 const otpVerificationSchema = Joi.object({
@@ -23,8 +27,8 @@ const otpVerificationSchema = Joi.object({
     .pattern(/^[0-9]+$/)
     .required()
     .messages({
-      'string.length': 'OTP must be 6 digits',
-      'string.pattern.base': 'OTP must contain only numbers',
+      "string.length": "OTP must be 6 digits",
+      "string.pattern.base": "OTP must contain only numbers",
     }),
   verificationId: Joi.string().required(),
 });
@@ -38,7 +42,7 @@ export const validatePhoneAuth = (
   if (error) {
     res.status(400).json({
       success: false,
-      message: 'Validation failed',
+      message: "Validation failed",
       error: error.details.map((detail) => detail.message),
     });
     return;
@@ -52,11 +56,13 @@ export const validateOTPVerification = (
   next: NextFunction
 ): void => {
   try {
-    const { error } = otpVerificationSchema.validate(req.body, { abortEarly: false });
+    const { error } = otpVerificationSchema.validate(req.body, {
+      abortEarly: false,
+    });
     if (error) {
       res.status(400).json({
         success: false,
-        message: 'Validation failed',
+        message: "Validation failed",
         error: error.details.map((detail) => detail.message),
       });
       return;

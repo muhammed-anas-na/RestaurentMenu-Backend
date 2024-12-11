@@ -1,10 +1,32 @@
-import jwt from 'jsonwebtoken';
-import { PhoneAuthRequest, VerifyOTPRequest, AuthResponse } from '../types/auth.types';
+// src/services/auth.service.ts
+import {
+  AuthResponse,
+  PhoneAuthRequest,
+  VerifyOTPRequest,
+} from "../types/auth.types";
+import { BlockingService } from "./blocking.service";
+import { User } from "../models/user.model";
+import jwt from "jsonwebtoken";
+import { DeviceInfo } from "security.types";
+import { RequestLog, FailedAttempt } from "../models/security.model";
+
+interface OTPData {
+  otp: string;
+  timestamp: number;
+  attempts: number;
+}
 
 export class AuthService {
   private static instance: AuthService;
-  
-  private constructor() {}
+  private blockingService: BlockingService;
+  // Using Map as temporary storage (in production, Firebase handles this)
+  private tempOTPStore: Map<string, OTPData> = new Map();
+
+  private constructor() {
+    this.blockingService = BlockingService.getInstance();
+    // Clear expired OTPs every 5 minutes
+    setInterval(() => this.clearExpiredOTPs(), 5 * 60 * 1000);
+  }
 
   static getInstance(): AuthService {
     if (!AuthService.instance) {
@@ -13,91 +35,234 @@ export class AuthService {
     return AuthService.instance;
   }
 
-  async initiatePhoneAuth(data: PhoneAuthRequest): Promise<AuthResponse> {
-    try {
-      const { phoneNumber } = data;
-
-      // Generate verification code
-      const verificationId = this.generateVerificationCode();
-
-      // Mock SMS sending for development
-      console.log(`[DEV] SMS to ${phoneNumber}: Your verification code is: ${verificationId}`);
-
-      return {
-        success: true,
-        message: 'OTP sent successfully',
-        data: { verificationId },
-      };
-    } catch (error: any) {
-      console.error('Phone auth initiation failed:', error);
-      return {
-        success: false,
-        message: 'Failed to initiate phone authentication',
-        error: error.message,
-      };
+  private clearExpiredOTPs(): void {
+    const now = Date.now();
+    for (const [phoneNumber, data] of this.tempOTPStore.entries()) {
+      if (data.timestamp < now) {
+        this.tempOTPStore.delete(phoneNumber);
+      }
     }
   }
 
-  private generateVerificationCode(): string {
-    return Math.random().toString().substring(2, 8); // 6-digit code
+  async initiatePhoneAuth(
+    data: PhoneAuthRequest,
+    deviceInfo: DeviceInfo
+  ): Promise<AuthResponse> {
+    try {
+      const { phoneNumber } = data;
+
+      const isSuspicious = await this.checkSuspiciousActivity(
+        phoneNumber,
+        deviceInfo
+      );
+      if (isSuspicious) {
+        await this.logFailedAttempt(
+          deviceInfo.ip,
+          "IP",
+          "Suspicious activity detected"
+        );
+        return {
+          success: false,
+          message: "Request blocked due to suspicious activity",
+        };
+      }
+
+      // Check if blocked
+      const blockCheck = await this.blockingService.checkBlocked(phoneNumber);
+      if (!blockCheck.success) {
+        return blockCheck;
+      }
+
+      // Check if OTP already exists and is not expired
+      const existingOTP = this.tempOTPStore.get(phoneNumber);
+      if (existingOTP && existingOTP.timestamp > Date.now()) {
+        const remainingTime = Math.ceil(
+          (existingOTP.timestamp - Date.now()) / 1000
+        );
+        return {
+          success: false,
+          message: `Please wait ${remainingTime} seconds before requesting new OTP`,
+        };
+      }
+
+      // Generate new 6-digit OTP
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+      // Store OTP with 5-minute expiration
+      this.tempOTPStore.set(phoneNumber, {
+        otp,
+        timestamp: Date.now() + 5 * 60 * 1000, // 5 minutes
+        attempts: 0,
+      });
+
+      // Record attempt for blocking system
+      await this.blockingService.recordAttempt(phoneNumber);
+
+      // In development, log OTP (in production, Firebase sends SMS)
+      console.log(`[DEV] OTP for ${phoneNumber}: ${otp}`);
+
+      return {
+        success: true,
+        message: "OTP sent successfully",
+        data: {
+          verificationId: phoneNumber, // In production, Firebase provides this
+          expiresIn: 300, // 5 minutes in seconds
+        },
+      };
+    } catch (error: any) {
+      console.error("Phone auth initiation failed:", error);
+      return {
+        success: false,
+        message: "Failed to initiate phone authentication",
+        error: error.message,
+      };
+    }
   }
 
   async verifyOTP(data: VerifyOTPRequest): Promise<AuthResponse> {
     try {
-      const { phoneNumber, otpCode, verificationId } = data;
+      const { phoneNumber, otpCode } = data;
 
-      // In production, use Firebase's verifyPhoneNumber
-      // This is a simplified version
-      const isValid = await this.validateOTP(phoneNumber, otpCode, verificationId);
+      // Check if blocked
+      const blockCheck = await this.blockingService.checkBlocked(phoneNumber);
+      if (!blockCheck.success) {
+        return blockCheck;
+      }
 
-      if (!isValid) {
+      // Get stored OTP data
+      const storedData = this.tempOTPStore.get(phoneNumber);
+
+      // Check if OTP exists
+      if (!storedData) {
         return {
           success: false,
-          message: 'Invalid OTP',
+          message: "OTP expired or not found. Please request new OTP.",
         };
       }
 
-      // Generate JWT token
-      const token = this.generateToken(phoneNumber);
+      // Check if OTP is expired
+      if (Date.now() > storedData.timestamp) {
+        this.tempOTPStore.delete(phoneNumber);
+        return {
+          success: false,
+          message: "OTP expired. Please request new OTP.",
+        };
+      }
 
-      // Create or update user in your database
-      const user = await this.createOrUpdateUser(phoneNumber);
+      // Increment attempts
+      storedData.attempts += 1;
+
+      // Check max attempts for this specific OTP
+      if (storedData.attempts > 3) {
+        this.tempOTPStore.delete(phoneNumber);
+        await this.blockingService.recordAttempt(phoneNumber);
+        return {
+          success: false,
+          message: "Too many invalid attempts. Please request new OTP.",
+        };
+      }
+
+      // Verify OTP
+      if (storedData.otp !== otpCode) {
+        await this.blockingService.recordAttempt(phoneNumber);
+        return {
+          success: false,
+          message: `Invalid OTP. ${3 - storedData.attempts} attempts remaining.`,
+        };
+      }
+
+      // OTP verified - clear it
+      this.tempOTPStore.delete(phoneNumber);
+
+      // Create or update user
+      let user = await User.findOne({ phoneNumber });
+      if (!user) {
+        user = await User.create({
+          phoneNumber,
+          isVerified: true,
+        });
+      } else {
+        user.isVerified = true;
+        user.lastLogin = new Date();
+        await user.save();
+      }
+
+      // Generate JWT
+      const token = jwt.sign(
+        { userId: user._id, phoneNumber },
+        process.env.JWT_SECRET!,
+        { expiresIn: "7d" }
+      );
 
       return {
         success: true,
-        message: 'Authentication successful',
+        message: "Authentication successful",
         data: { token, user },
       };
     } catch (error: any) {
-      console.error('OTP verification failed:', error);
+      console.error("OTP verification failed:", error);
       return {
         success: false,
-        message: 'Failed to verify OTP',
+        message: "Failed to verify OTP",
         error: error.message,
       };
     }
   }
 
-  private async validateOTP(
+  private async logFailedAttempt(
+    identifier: string,
+    type: "IP" | "PHONE",
+    reason: string
+  ): Promise<void> {
+    try {
+      await FailedAttempt.findOneAndUpdate(
+        { identifier, type },
+        {
+          $inc: { attempts: 1 },
+          $set: { lastAttempt: new Date() },
+          $push: { details: `${new Date().toISOString()}: ${reason}` },
+        },
+        { upsert: true }
+      );
+    } catch (error) {
+      console.error("Error logging failed attempt:", error);
+    }
+  }
+
+  private async checkSuspiciousActivity(
     phoneNumber: string,
-    otpCode: string,
-    verificationId: string
+    deviceInfo: DeviceInfo
   ): Promise<boolean> {
-    // Implement OTP validation logic
-    // In production, use Firebase's auth().verifyPhoneNumber()
-    return true;
-  }
+    try {
+      // Check for multiple devices
+      const recentRequests = await RequestLog.find({
+        "deviceInfo.phoneNumber": phoneNumber,
+        lastRequest: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+      }).lean(); // Use lean() to get plain JavaScript objects
 
-  private generateToken(phoneNumber: string): string {
-    return jwt.sign(
-      { phoneNumber },
-      process.env.JWT_SECRET!,
-      { expiresIn: '7d' }
-    );
-  }
+      const uniqueDevices = new Set(
+        recentRequests
+          .filter(
+            (request) => request.deviceInfo && request.deviceInfo.userAgent
+          )
+          .map((request) => request.deviceInfo.userAgent)
+      );
 
-  private async createOrUpdateUser(phoneNumber: string): Promise<any> {
-    // Implement user creation/update logic in your database
-    return { phoneNumber };
+      if (uniqueDevices.size > 5) {
+        await this.logFailedAttempt(
+          phoneNumber,
+          "PHONE",
+          "Multiple device attempts"
+        );
+        return true;
+      }
+      // Check for geographical anomalies (if you have IP geolocation)
+      // Check for unusual timing patterns
+      // Check for known malicious IPs
+      return false;
+    } catch (error) {
+      console.error("Error checking suspicious activity:", error);
+      return false;
+    }
   }
 }

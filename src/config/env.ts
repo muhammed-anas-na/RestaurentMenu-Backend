@@ -1,15 +1,17 @@
-import dotenv from 'dotenv';
-import path from 'path';// Load environment variables based on NODE_ENV
-const envFile = process.env.NODE_ENV === 'production' ? '.env' : '.env.development';
+import dotenv from "dotenv";
+import path from "path"; // Load environment variables based on NODE_ENV
+const envFile =
+  process.env.NODE_ENV === "production" ? ".env" : ".env.development";
 dotenv.config({ path: path.resolve(process.cwd(), envFile) });
 
 // Validate required environment variables
 const requiredEnvVars = [
-  'FIREBASE_PROJECT_ID',
-  'FIREBASE_PRIVATE_KEY',
-  'FIREBASE_CLIENT_EMAIL',
-  'JWT_SECRET',
-  'PORT',
+  "FIREBASE_PROJECT_ID",
+  "FIREBASE_PRIVATE_KEY",
+  "FIREBASE_CLIENT_EMAIL",
+  "JWT_SECRET",
+  "PORT",
+  "MONGODB_URI",
 ];
 
 for (const envVar of requiredEnvVars) {
@@ -26,10 +28,17 @@ export default {
   },
   jwt: {
     secret: process.env.JWT_SECRET!,
-    expiresIn: '7d',
+    expiresIn: "7d",
   },
   server: {
     port: Number(process.env.PORT!) || 3000,
-    env: process.env.NODE_ENV || 'development',
+    env: process.env.NODE_ENV || "development",
+  },
+  mongodb: {
+    uri: process.env.MONGODB_URI!,
+    options: {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    },
   },
 };
