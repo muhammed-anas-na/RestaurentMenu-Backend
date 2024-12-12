@@ -1,10 +1,12 @@
 // src/models/user.model.ts
-import mongoose, { Document, Schema } from 'mongoose';
+import mongoose, { Document, Schema } from "mongoose";
 
 export interface IUser extends Document {
   phoneNumber: string;
+  name: string;
+  numberOfMembers: number;
   isVerified: boolean;
-  role: 'customer' | 'admin';
+  role: "customer" | "admin";
   createdAt: Date;
   updatedAt: Date;
   lastLogin?: Date;
@@ -15,28 +17,37 @@ const UserSchema = new Schema({
     type: String,
     required: true,
     unique: true,
-    index: true
+    index: true,
+  },
+  name: {
+    type: String,
+    required: true,
+  },
+  numberOfMembers: {
+    type: Number,
+    required: true,
+    min: 1,
   },
   isVerified: {
     type: Boolean,
-    default: false
+    default: false,
   },
   role: {
     type: String,
-    enum: ['customer', 'admin'],
-    default: 'customer'
+    enum: ["customer", "admin"],
+    default: "customer",
   },
   lastLogin: {
-    type: Date
+    type: Date,
   },
   createdAt: {
     type: Date,
-    default: Date.now
+    default: Date.now,
   },
   updatedAt: {
     type: Date,
-    default: Date.now
-  }
+    default: Date.now,
+  },
 });
 
-export const User = mongoose.model<IUser>('User', UserSchema);
+export const User = mongoose.model<IUser>("User", UserSchema);

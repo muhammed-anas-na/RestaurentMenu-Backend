@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from "express";
+import { Request, Response, NextFunction } from "express-serve-static-core";
 import Joi from "joi";
 
 const phoneAuthSchema = Joi.object({
@@ -10,12 +10,16 @@ const phoneAuthSchema = Joi.object({
         "Phone number must be in E.164 format (e.g., +14155552671)",
       "any.required": "Phone number is required",
     }),
-  recaptchaToken:
-    process.env.NODE_ENV === "production"
-      ? Joi.string().required().messages({
-          "any.required": "reCAPTCHA token is required",
-        })
-      : Joi.string().optional(),
+  name: Joi.string().min(2).max(50).required().messages({
+    "string.min": "Name must be at least 2 characters long",
+    "any.required": "Name is required",
+  }),
+  numberOfMembers: Joi.number().min(1).max(20).required().messages({
+    "number.min": "Number of members must be at least 1",
+    "number.max": "Maximum 20 members allowed",
+    "any.required": "Number of members is required",
+  }),
+  recaptchaToken: Joi.string().optional(), // For development
 });
 
 const otpVerificationSchema = Joi.object({

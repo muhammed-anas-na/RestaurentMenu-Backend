@@ -1,4 +1,9 @@
-import { Request, Response, NextFunction, ErrorRequestHandler } from 'express';
+import {
+  Request,
+  Response,
+  NextFunction,
+  ErrorRequestHandler,
+} from "express-serve-static-core";
 
 export class AppError extends Error {
   constructor(
@@ -22,16 +27,16 @@ export const errorHandler = (
       success: false,
       message: err.message,
       isOperational: err.isOperational,
-      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+      stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
     });
     return;
   }
 
-  console.error('Unhandled error:', err);
+  console.error("Unhandled error:", err);
   res.status(500).json({
     success: false,
-    message: 'Internal server error',
+    message: "Internal server error",
     isOperational: false,
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+    stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
   });
-}; 
+};

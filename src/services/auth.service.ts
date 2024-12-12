@@ -14,6 +14,8 @@ interface OTPData {
   otp: string;
   timestamp: number;
   attempts: number;
+  name: string;
+  numberOfMembers: number;
 }
 
 export class AuthService {
@@ -85,14 +87,16 @@ export class AuthService {
         };
       }
 
-      // Generate new 6-digit OTP
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      // Generate new 4-digit OTP
+      const otp = Math.floor(1000 + Math.random() * 9000).toString();
 
       // Store OTP with 5-minute expiration
       this.tempOTPStore.set(phoneNumber, {
         otp,
-        timestamp: Date.now() + 5 * 60 * 1000, // 5 minutes
+        timestamp: Date.now() + 5 * 60 * 1000,
         attempts: 0,
+        name: data.name, // Store these
+        numberOfMembers: data.numberOfMembers, // additional fields
       });
 
       // Record attempt for blocking system
@@ -179,14 +183,17 @@ export class AuthService {
       if (!user) {
         user = await User.create({
           phoneNumber,
+          name: storedData.name, // Use the stored data
+          numberOfMembers: storedData.numberOfMembers,
           isVerified: true,
         });
       } else {
         user.isVerified = true;
         user.lastLogin = new Date();
+        user.name = storedData.name; // Use stored data
+        user.numberOfMembers = storedData.numberOfMembers; // here as well
         await user.save();
       }
-
       // Generate JWT
       const token = jwt.sign(
         { userId: user._id, phoneNumber },
