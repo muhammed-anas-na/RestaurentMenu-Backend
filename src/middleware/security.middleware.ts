@@ -1,21 +1,10 @@
 // src/middleware/security.middleware.ts
-import { Request, Response, NextFunction } from "express";
+import { Request, Response } from 'express-serve-static-core';
 import { RequestLog, FailedAttempt } from "../models/security.model";
+import { NextFunction } from 'express-serve-static-core';
+import { DeviceInfo } from '../types/security.types';
 
-export interface DeviceInfo {
-  userAgent: string;
-  ip: string;
-  timestamp: number;
-}
 
-// Extend Express Request
-declare global {
-  namespace Express {
-    interface Request {
-      deviceInfo: DeviceInfo;
-    }
-  }
-}
 
 export const securityHeaders = (
   req: Request,

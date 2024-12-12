@@ -1,9 +1,9 @@
-import { DeviceInfo } from './security.types';
+  import { DeviceInfo } from './security.types';
 
-declare global {
-  namespace Express {
-    interface Request {
-      deviceInfo: DeviceInfo;
+  declare global {
+    namespace Express {
+      interface Request {
+        deviceInfo: DeviceInfo;
+      }
     }
   }
-}
