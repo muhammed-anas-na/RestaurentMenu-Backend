@@ -26,7 +26,21 @@ const app = express();
 app.use(helmet());
 app.use(cors());
 app.use(compression());
-app.use(express.json());
+app.use(express.json({
+  limit: '10kb',
+  strict: true,
+  verify: (req: Request, res: Response, buffer: Buffer) => {
+      try {
+          JSON.parse(buffer.toString());
+      } catch (e) {
+          res.status(400).json({ 
+              success: false,
+              message: 'Invalid JSON format'
+          });
+          throw new Error('Invalid JSON');
+      }
+  }
+}));
 app.use(express.urlencoded({ extended: true }));
 
 // Security middleware

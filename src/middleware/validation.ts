@@ -27,11 +27,11 @@ const otpVerificationSchema = Joi.object({
     .pattern(/^\+[1-9]\d{1,14}$/)
     .required(),
   otpCode: Joi.string()
-    .length(6)
+    .length(4)
     .pattern(/^[0-9]+$/)
     .required()
     .messages({
-      "string.length": "OTP must be 6 digits",
+      "string.length": "OTP must be 4 digits",
       "string.pattern.base": "OTP must contain only numbers",
     }),
   verificationId: Joi.string().required(),
