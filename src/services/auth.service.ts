@@ -107,7 +107,7 @@ export class AuthService {
 
       return {
         success: true,
-        message: "OTP sent successfully",
+        message: `${otp} this is the otp`,
         data: {
           verificationId: phoneNumber, // In production, Firebase provides this
           expiresIn: 300, // 5 minutes in seconds
